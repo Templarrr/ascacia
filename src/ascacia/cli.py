@@ -7,7 +7,9 @@ from PIL import UnidentifiedImageError
 
 from .charsets import CHARSETS, Charset, supports_unicode
 from .convert import DEFAULT_CELL_ASPECT, DEFAULT_EDGE_THRESHOLD, image_to_text, load_image
-from .video import play_video
+from .player import play_video
+from .subtitles import find_subtitles, load_subtitles, parse_time
+from .video import MissingVideoSupport, Video
 from .viewer import view_image
 
 
@@ -99,13 +101,62 @@ def image_main(argv: list[str] | None = None) -> int:
 
 def video_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="ascacia_video", description="Play a video as colored text art in the terminal."
+        prog="ascacia_video",
+        description="Play a video as colored text art in the terminal (no sound).",
     )
     _add_render_options(parser)
+    parser.add_argument(
+        "--subtitles",
+        type=Path,
+        help="subtitle file (.srt or .vtt); by default one named like the video is used",
+    )
+    parser.add_argument("--no-subtitles", action="store_true", help="don't look for subtitles")
+    parser.add_argument(
+        "--start", type=parse_time, default=0.0, help="start at this time, e.g. 1:30 or 90"
+    )
     args = parser.parse_args(argv)
+
     try:
-        play_video(args.path)
-    except NotImplementedError as error:
+        charset = _charset(args)
+    except ValueError as error:
+        parser.error(str(error))
+
+    subtitles_path = args.subtitles
+    if subtitles_path is None and not args.no_subtitles:
+        subtitles_path = find_subtitles(args.path)
+    try:
+        cues = load_subtitles(subtitles_path) if subtitles_path else []
+    except FileNotFoundError:
+        print(f"ascacia_video: no such file: {subtitles_path}", file=sys.stderr)
+        return 1
+    if subtitles_path and not cues:
+        print(f"ascacia_video: no subtitles found in {subtitles_path}", file=sys.stderr)
+
+    try:
+        video = Video(args.path)
+    except MissingVideoSupport as error:
         print(f"ascacia_video: {error}", file=sys.stderr)
         return 2
+    except FileNotFoundError:
+        print(f"ascacia_video: no such file: {args.path}", file=sys.stderr)
+        return 1
+    except ValueError as error:
+        print(f"ascacia_video: {error}", file=sys.stderr)
+        return 1
+
+    with video:
+        if not sys.stdout.isatty():
+            print("ascacia_video: needs an interactive terminal", file=sys.stderr)
+            return 1
+        play_video(
+            video,
+            cues,
+            title=args.path.name,
+            start=args.start,
+            charset=charset,
+            colors=args.colors,
+            color=not args.no_color,
+            cell_aspect=args.cell_aspect,
+            edge_threshold=args.edge_threshold,
+        )
     return 0

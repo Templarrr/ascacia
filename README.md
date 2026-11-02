@@ -1,12 +1,19 @@
 # ASCacia
 
-Turn images (and, soon, videos) into colored ASCII or Unicode art and view them right in the
+Turn images and videos into colored ASCII or Unicode art and view them right in the
 terminal, locally or over SSH.
 
 ## Install
 
 ```sh
 uv tool install git+https://github.com/Templarrr/ascacia
+```
+
+Video support needs [PyAV](https://pyav.basswood-io.com/) (it ships its own FFmpeg) and is
+optional; add the `video` extra to get it:
+
+```sh
+uv tool install "ascacia[video] @ git+https://github.com/Templarrr/ascacia"
 ```
 
 ## Usage
@@ -22,7 +29,32 @@ The picture is fitted to the terminal keeping its proportions and is refitted wh
 window is resized. Contours are drawn with line symbols (`- / | \` or `─ ╱ │ ╲`), the rest
 with a density ramp, colored with the standard 16 (or 8) terminal colors.
 
-`ascacia_video` is a placeholder for now.
+### Video
+
+```sh
+ascacia_video movie.mp4                         # subtitles next to it are picked up
+ascacia_video movie.mp4 --subtitles other.vtt  # or given explicitly
+ascacia_video movie.mp4 --start 12:30 --charset unicode
+```
+
+![player](docs/examples/player.png)
+
+The frame takes the main part of the screen, the subtitles run beside it like song lyrics
+(the current lines bright, the ones around them gray) and the timeline and keys sit at the
+bottom. Subtitles are `.srt` or `.vtt` files named like the video: `movie.srt`,
+`movie.en.srt` and so on. There is no sound.
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | back / forward 5 seconds |
+| `↓` / `↑` | back / forward 1 minute |
+| `space` | pause / resume |
+| `j` | jump to a time (`1:02:03`, `12:30` or `90`) |
+| `s` | show / hide subtitles |
+| `q`, `Esc` | quit |
+
+Frames that can't be converted in time are skipped, so playback keeps pace with the clock
+on slow machines or big terminals.
 
 ## As a library
 
@@ -33,6 +65,14 @@ image = load_image("photo.jpg")
 cols, rows = fit_size(image.width, image.height, max_cols=120, max_rows=40)
 cells = image_to_cells(image, cols, rows, charset=UNICODE)  # rows of Cell(char, color)
 print(render_ansi(cells))
+
+# with the video extra
+from ascacia import Video, load_subtitles, play_video
+
+with Video("movie.mp4") as video:
+    for frame in video.frames(start=60):
+        cells = image_to_cells(frame.to_image(320, 120), 80, 30)
+    play_video(video, load_subtitles("movie.srt"))
 ```
 
 ## Development

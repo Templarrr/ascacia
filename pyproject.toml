@@ -14,8 +14,14 @@ dependencies = [
 ascacia_image = "ascacia.cli:image_main"
 ascacia_video = "ascacia.cli:video_main"
 
+[project.optional-dependencies]
+video = [
+    "av>=12",
+]
+
 [dependency-groups]
 dev = [
+    "av>=12",
     "pytest>=8.0",
     "ruff>=0.6",
 ]

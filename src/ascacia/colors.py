@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,9 @@ _HUES = {
 _BRIGHT_VALUE = 170
 
 
+# Video calls this for every cell of every frame, and neighbouring cells and frames
+# repeat colors a lot.
+@lru_cache(maxsize=1 << 16)
 def nearest_color(rgb: tuple[int, int, int], colors: int = 16) -> int:
     """Return the ANSI color index (1-15) that best matches the hue of ``rgb``.
 
@@ -54,10 +58,10 @@ def nearest_color(rgb: tuple[int, int, int], colors: int = 16) -> int:
     if value == 0:
         return 7
     scale = 255 / value
-    normalized = tuple(channel * scale for channel in rgb)
+    r, g, b = (channel * scale for channel in rgb)
     hue = min(
         _HUES,
-        key=lambda i: sum((a - b) ** 2 for a, b in zip(normalized, _HUES[i], strict=True)),
+        key=lambda i: (r - _HUES[i][0]) ** 2 + (g - _HUES[i][1]) ** 2 + (b - _HUES[i][2]) ** 2,
     )
     if colors == 16 and value >= _BRIGHT_VALUE:
         return hue + 8
