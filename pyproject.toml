@@ -1,0 +1,40 @@
+[project]
+name = "ascacia"
+version = "0.1.0"
+description = "Convert images and video to colored ASCII/Unicode art and view them in the terminal"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=10.3",
+    "windows-curses>=2.3; sys_platform == 'win32'",
+]
+
+[project.scripts]
+ascacia_image = "ascacia.cli:image_main"
+ascacia_video = "ascacia.cli:video_main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.8,<0.12"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Unicode symbols that look like ASCII ones are the whole point here.
+"src/ascacia/charsets.py" = ["RUF001"]
+"tests/*" = ["RUF001"]
