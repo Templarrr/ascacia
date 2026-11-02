@@ -77,8 +77,6 @@ def image_to_cells(
     data = rgb.resize((cols, rows), Image.Resampling.BOX).tobytes()
     averages = [tuple(data[i : i + 3]) for i in range(0, len(data), 3)]
     edges = _edge_symbols(rgb, cols, rows, charset.edges, edge_threshold)
-    ramp = charset.ramp
-    top = len(ramp) - 1
 
     cells = []
     for i, rgb_average in enumerate(averages):
@@ -90,7 +88,7 @@ def image_to_cells(
             source = max([rgb_average] + [averages[j] for j in neighbours], key=_brightness)
             cells.append(Cell(symbol, nearest_color(source, colors)))
         else:
-            symbol = ramp[round(_brightness(rgb_average) / 255 * top)]
+            symbol = charset.symbol(_brightness(rgb_average))
             cells.append(Cell(symbol, nearest_color(rgb_average, colors)))
     return [cells[y * cols : (y + 1) * cols] for y in range(rows)]
 

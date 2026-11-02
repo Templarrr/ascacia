@@ -48,6 +48,7 @@ def _charset(args: argparse.Namespace) -> Charset:
         ramp=args.ramp or charset.ramp,
         edges="" if args.no_edges else charset.edges,
         unicode=charset.unicode,
+        levels=None if args.ramp else charset.levels,
     )
 
 

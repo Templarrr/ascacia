@@ -70,6 +70,26 @@ def test_contours_are_drawn_with_matching_line_symbols(start, end, symbol):
     assert edge_symbols == {symbol}
 
 
+def gradient_symbols(charset):
+    image = Image.linear_gradient("L").rotate(90).convert("RGB")  # dark left, bright right
+    edgeless = Charset(ramp=charset.ramp, levels=charset.levels)
+    return image_to_cells(image, 256, 1, edgeless)[0]
+
+
+@pytest.mark.parametrize("charset", [ASCII, UNICODE])
+def test_brighter_cells_never_get_emptier_symbols(charset):
+    ranks = [charset.ramp.index(cell.char) for cell in gradient_symbols(charset)]
+
+    assert ranks == sorted(ranks)
+
+
+def test_unicode_shows_more_shades_than_ascii():
+    ascii_shades = {cell.char for cell in gradient_symbols(ASCII)}
+    unicode_shades = {cell.char for cell in gradient_symbols(UNICODE)}
+
+    assert len(unicode_shades) > 2 * len(ascii_shades)
+
+
 def test_edges_can_be_disabled():
     cells = image_to_cells(line_image((5, 50), (195, 50)), 20, 10, Charset(ramp=" #"))
 
