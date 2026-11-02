@@ -9,6 +9,17 @@ from .convert import (
     render_ansi,
     render_plain,
 )
+from .player import play_video
+from .subtitles import (
+    Cue,
+    find_subtitles,
+    format_time,
+    load_subtitles,
+    lyrics_lines,
+    parse_subtitles,
+    parse_time,
+)
+from .video import MissingVideoSupport, Video, VideoFrame
 from .viewer import view_image
 
 __all__ = [
@@ -18,12 +29,23 @@ __all__ = [
     "UNICODE",
     "Cell",
     "Charset",
+    "Cue",
+    "MissingVideoSupport",
     "TerminalColor",
+    "Video",
+    "VideoFrame",
+    "find_subtitles",
     "fit_size",
+    "format_time",
     "image_to_cells",
     "image_to_text",
     "load_image",
+    "load_subtitles",
+    "lyrics_lines",
     "nearest_color",
+    "parse_subtitles",
+    "parse_time",
+    "play_video",
     "render_ansi",
     "render_plain",
     "supports_unicode",
