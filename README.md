@@ -34,6 +34,8 @@ with a density ramp, colored with the standard 16 (or 8) terminal colors.
 ```sh
 ascacia_video movie.mp4                         # subtitles next to it are picked up
 ascacia_video movie.mp4 --subtitles other.vtt  # or given explicitly
+ascacia_video movie.mkv --list-subtitles       # tracks inside the video
+ascacia_video movie.mkv --subtitle-track fre   # pick one by number or language
 ascacia_video movie.mp4 --start 12:30 --charset unicode
 ```
 
@@ -41,8 +43,10 @@ ascacia_video movie.mp4 --start 12:30 --charset unicode
 
 The frame takes the main part of the screen, the subtitles run beside it like song lyrics
 (the current lines bright, the ones around them gray) and the timeline and keys sit at the
-bottom. Subtitles are `.srt` or `.vtt` files named like the video: `movie.srt`,
-`movie.en.srt` and so on. There is no sound.
+bottom. Subtitles come from, in order: `--subtitles`, an `.srt` or `.vtt` file named like
+the video (`movie.srt`, `movie.en.srt` and so on), or the first text track inside the video
+(SRT, ASS/SSA, WebVTT, MP4 timed text). Picture-based tracks (Blu-ray PGS, DVD VobSub) are
+skipped. There is no sound.
 
 | Key | Action |
 | --- | --- |
@@ -73,6 +77,10 @@ with Video("movie.mp4") as video:
     for frame in video.frames(start=60):
         cells = image_to_cells(frame.to_image(320, 120), 80, 30)
     play_video(video, load_subtitles("movie.srt"))
+
+with Video("movie.mkv") as video:
+    track = video.find_subtitle_track("eng")  # or a number, or None for the first text track
+    play_video(video, video.read_subtitles(track))
 ```
 
 ## Development

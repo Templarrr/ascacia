@@ -8,7 +8,7 @@ from PIL import UnidentifiedImageError
 from .charsets import CHARSETS, Charset, supports_unicode
 from .convert import DEFAULT_CELL_ASPECT, DEFAULT_EDGE_THRESHOLD, image_to_text, load_image
 from .player import play_video
-from .subtitles import find_subtitles, load_subtitles, parse_time
+from .subtitles import Cue, find_subtitles, load_subtitles, parse_time
 from .video import MissingVideoSupport, Video
 from .viewer import view_image
 
@@ -105,12 +105,24 @@ def video_main(argv: list[str] | None = None) -> int:
         description="Play a video as colored text art in the terminal (no sound).",
     )
     _add_render_options(parser)
-    parser.add_argument(
+    chosen = parser.add_mutually_exclusive_group()
+    chosen.add_argument(
         "--subtitles",
         type=Path,
-        help="subtitle file (.srt or .vtt); by default one named like the video is used",
+        help="subtitle file (.srt or .vtt); by default one named like the video is used, "
+        "else the first text track inside the video",
     )
-    parser.add_argument("--no-subtitles", action="store_true", help="don't look for subtitles")
+    chosen.add_argument(
+        "--subtitle-track",
+        metavar="TRACK",
+        help="subtitle track inside the video, by number or language (see --list-subtitles)",
+    )
+    chosen.add_argument("--no-subtitles", action="store_true", help="don't show subtitles")
+    parser.add_argument(
+        "--list-subtitles",
+        action="store_true",
+        help="list the subtitle tracks inside the video and exit",
+    )
     parser.add_argument(
         "--start", type=parse_time, default=0.0, help="start at this time, e.g. 1:30 or 90"
     )
@@ -120,17 +132,6 @@ def video_main(argv: list[str] | None = None) -> int:
         charset = _charset(args)
     except ValueError as error:
         parser.error(str(error))
-
-    subtitles_path = args.subtitles
-    if subtitles_path is None and not args.no_subtitles:
-        subtitles_path = find_subtitles(args.path)
-    try:
-        cues = load_subtitles(subtitles_path) if subtitles_path else []
-    except FileNotFoundError:
-        print(f"ascacia_video: no such file: {subtitles_path}", file=sys.stderr)
-        return 1
-    if subtitles_path and not cues:
-        print(f"ascacia_video: no subtitles found in {subtitles_path}", file=sys.stderr)
 
     try:
         video = Video(args.path)
@@ -145,6 +146,21 @@ def video_main(argv: list[str] | None = None) -> int:
         return 1
 
     with video:
+        if args.list_subtitles:
+            for track in video.subtitle_tracks:
+                print(track.describe())
+            if not video.subtitle_tracks:
+                print(f"ascacia_video: no subtitle tracks in {args.path}", file=sys.stderr)
+            return 0
+        try:
+            cues = _subtitles(args, video)
+        except FileNotFoundError:
+            print(f"ascacia_video: no such file: {args.subtitles}", file=sys.stderr)
+            return 1
+        except ValueError as error:
+            print(f"ascacia_video: {error}", file=sys.stderr)
+            return 1
+
         if not sys.stdout.isatty():
             print("ascacia_video: needs an interactive terminal", file=sys.stderr)
             return 1
@@ -160,3 +176,22 @@ def video_main(argv: list[str] | None = None) -> int:
             edge_threshold=args.edge_threshold,
         )
     return 0
+
+
+def _subtitles(args: argparse.Namespace, video: Video) -> list[Cue]:
+    # A file given or lying next to the video wins over tracks inside it.
+    if args.no_subtitles:
+        return []
+    if args.subtitles:
+        path = args.subtitles
+    elif args.subtitle_track is None:
+        path = find_subtitles(args.path)
+    else:
+        path = None
+    if path:
+        cues = load_subtitles(path)
+        if not cues:
+            print(f"ascacia_video: no subtitles found in {path}", file=sys.stderr)
+        return cues
+    track = video.find_subtitle_track(args.subtitle_track)
+    return video.read_subtitles(track) if track else []

@@ -1,9 +1,12 @@
 from collections.abc import Iterator
+from dataclasses import dataclass
 from fractions import Fraction
 from os import PathLike
 from typing import Any
 
 from PIL import Image
+
+from .subtitles import Cue, ass_dialogue_text
 
 INSTALL_HINT = (
     "video support is not installed; reinstall with the video extra, e.g.\n"
@@ -24,6 +27,33 @@ def _import_av():
     return av
 
 
+# Picture-based subtitles (Blu-ray PGS, DVD VobSub, ...) have no text for the panel.
+BITMAP_SUBTITLE_CODECS = frozenset(
+    {"hdmv_pgs_subtitle", "dvd_subtitle", "dvb_subtitle", "xsub", "dvb_teletext"}
+)
+# For cues stored without a duration (shown until the next one).
+_MAX_CUE_LENGTH = 5.0
+
+
+@dataclass(frozen=True)
+class SubtitleTrack:
+    number: int
+    codec: str
+    language: str | None = None
+    title: str | None = None
+
+    @property
+    def is_text(self) -> bool:
+        return self.codec not in BITMAP_SUBTITLE_CODECS
+
+    def describe(self) -> str:
+        parts = [str(self.number), self.language or "und"]
+        if self.title:
+            parts.append(repr(self.title))
+        parts.append(f"({self.codec}{'' if self.is_text else ', bitmap: not supported'})")
+        return " ".join(parts)
+
+
 class VideoFrame:
     def __init__(self, time: float, frame: Any, display_size: tuple[int, int]):
         self.time = time
@@ -36,13 +66,26 @@ class VideoFrame:
         return self._frame.to_image(width=width or display_width, height=height or display_height)
 
 
+def _decoded_texts(packet) -> Iterator[str]:
+    for decoded in packet.decode():
+        # PyAV 14+ yields one subtitle per item, older versions a set of them.
+        for subtitle in decoded if hasattr(decoded, "__iter__") else [decoded]:
+            line = getattr(subtitle, "ass", None)
+            if isinstance(line, bytes):
+                line = line.decode("utf-8", errors="replace")
+            text = ass_dialogue_text(line) if line else ""
+            if text:
+                yield text
+
+
 class Video:
     """A video file decoded with PyAV, which comes with the optional ``video`` extra."""
 
     def __init__(self, path: str | PathLike):
         av = _import_av()
+        self._path = str(path)
         try:
-            self._container = av.open(str(path))
+            self._container = av.open(self._path)
         except FileNotFoundError:
             # PyAV's own FileNotFoundError is also an FFmpegError; keep it a plain one.
             raise
@@ -69,6 +112,51 @@ class Video:
             self.duration = self._container.duration / 1_000_000
         else:
             self.duration = 0.0
+        self.subtitle_tracks = [
+            SubtitleTrack(
+                number,
+                stream.codec_context.name,
+                stream.language if stream.language not in (None, "und") else None,
+                stream.metadata.get("title"),
+            )
+            for number, stream in enumerate(self._container.streams.subtitles)
+        ]
+
+    def find_subtitle_track(self, choice: str | int | None = None) -> SubtitleTrack | None:
+        """Track by number or language code; with no choice, the first text track (if any)."""
+        if choice is None:
+            return next((track for track in self.subtitle_tracks if track.is_text), None)
+        for track in self.subtitle_tracks:
+            if str(choice) == str(track.number) or str(choice).lower() == track.language:
+                return track
+        raise ValueError(f"no subtitle track {choice!r} in {self._path}")
+
+    def read_subtitles(self, track: SubtitleTrack) -> list[Cue]:
+        """All cues of an embedded text subtitle track, timed like the frames."""
+        if not track.is_text:
+            raise ValueError(f"subtitle track {track.number} is a picture format ({track.codec})")
+        av = _import_av()
+        # A separate container, so reading the whole file doesn't move the playback position.
+        with av.open(self._path) as container:
+            stream = container.streams.subtitles[track.number]
+            time_base = stream.time_base or Fraction(1, 1000)
+            timed = []
+            for packet in container.demux(stream):
+                if packet.pts is None:
+                    continue
+                start = float(packet.pts * time_base) - self._start
+                length = float(packet.duration * time_base) if packet.duration else None
+                text = "\n".join(_decoded_texts(packet))
+                if text:
+                    timed.append((start, length, text))
+        timed.sort(key=lambda item: item[0])
+        cues = []
+        for i, (start, length, text) in enumerate(timed):
+            if length is None:
+                following = timed[i + 1][0] if i + 1 < len(timed) else start + _MAX_CUE_LENGTH
+                length = min(following - start, _MAX_CUE_LENGTH)
+            cues.append(Cue(start, start + length, text))
+        return cues
 
     def frames(self, start: float = 0.0) -> Iterator[VideoFrame]:
         """Frames in order from ``start`` seconds; times count from the start of the video."""

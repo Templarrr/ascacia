@@ -29,12 +29,24 @@ def parse_subtitles(text: str) -> list[Cue]:
         for i, line in enumerate(lines):
             match = _TIMING.search(line)
             if match:
-                body = "\n".join(_MARKUP.sub("", part).strip() for part in lines[i + 1 :])
+                body = "\n".join(strip_markup(part) for part in lines[i + 1 :])
                 start, end = parse_time(match["start"]), parse_time(match["end"])
                 if body.strip():
                     cues.append(Cue(start, end, body.strip()))
                 break
     return sorted(cues, key=lambda cue: cue.start)
+
+
+def strip_markup(text: str) -> str:
+    return _MARKUP.sub("", text).strip()
+
+
+def ass_dialogue_text(line: str) -> str:
+    """Plain text of an ASS ``Dialogue`` event, the form FFmpeg decodes every text subtitle to."""
+    # ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text - only Text may hold commas.
+    text = line.split(",", 8)[-1]
+    text = text.replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ")
+    return "\n".join(strip_markup(part) for part in text.split("\n")).strip()
 
 
 def load_subtitles(path: str | PathLike) -> list[Cue]:

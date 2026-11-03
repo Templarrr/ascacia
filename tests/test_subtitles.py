@@ -2,6 +2,7 @@ import pytest
 
 from ascacia import (
     Cue,
+    ass_dialogue_text,
     find_subtitles,
     format_time,
     load_subtitles,
@@ -39,6 +40,11 @@ def test_parse_vtt_skips_header_notes_and_settings():
         Cue(1.0, 2.5, "Hello there"),
         Cue(3603.0, 3604.0, "Later"),
     ]
+
+
+def test_ass_dialogue_text():
+    line = r"0,0,Default,,0,0,0,,{\i1}Hello{\i0},\hthere\NTwo"
+    assert ass_dialogue_text(line) == "Hello, there\nTwo"
 
 
 def test_load_legacy_encoded_file(tmp_path):
