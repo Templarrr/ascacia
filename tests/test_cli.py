@@ -67,3 +67,44 @@ def test_missing_subtitle_file_is_reported(video_path, tmp_path, capsys):
 def test_video_player_needs_a_terminal(video_path, capsys):
     assert video_main([str(video_path)]) == 1
     assert "interactive terminal" in capsys.readouterr().err
+
+
+@pytest.fixture
+def played(monkeypatch):
+    """Cues the player would get, without needing a terminal."""
+    calls = []
+    monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
+    monkeypatch.setattr("ascacia.cli.play_video", lambda video, cues, **_: calls.append(cues))
+    return calls
+
+
+def test_list_embedded_subtitles(subtitled_video_path, capsys):
+    assert video_main([str(subtitled_video_path), "--list-subtitles"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 2
+    assert lines[0].startswith("0 eng 'eng subs'")
+    assert lines[1].startswith("1 fre 'fre subs'")
+
+
+def test_first_embedded_track_is_shown_by_default(subtitled_video_path, played):
+    assert video_main([str(subtitled_video_path)]) == 0
+    assert played[0][0].text == "Hello, there"
+
+
+def test_embedded_track_chosen_by_language(subtitled_video_path, played):
+    assert video_main([str(subtitled_video_path), "--subtitle-track", "fre"]) == 0
+    assert played[0][0].text == "Bonjour, there"
+
+
+def test_subtitle_file_next_to_video_wins_over_embedded(subtitled_video_path, tmp_path, played):
+    video = tmp_path / "movie.mkv"
+    video.write_bytes(subtitled_video_path.read_bytes())
+    (tmp_path / "movie.srt").write_text("1\n00:00:00,000 --> 00:00:01,000\nFrom file\n")
+
+    assert video_main([str(video)]) == 0
+    assert played[0][0].text == "From file"
+
+
+def test_unknown_subtitle_track_is_reported(subtitled_video_path, capsys):
+    assert video_main([str(subtitled_video_path), "--subtitle-track", "9"]) == 1
+    assert "no subtitle track '9'" in capsys.readouterr().err

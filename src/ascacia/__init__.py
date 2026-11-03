@@ -12,6 +12,7 @@ from .convert import (
 from .player import play_video
 from .subtitles import (
     Cue,
+    ass_dialogue_text,
     find_subtitles,
     format_time,
     load_subtitles,
@@ -19,7 +20,7 @@ from .subtitles import (
     parse_subtitles,
     parse_time,
 )
-from .video import MissingVideoSupport, Video, VideoFrame
+from .video import MissingVideoSupport, SubtitleTrack, Video, VideoFrame
 from .viewer import view_image
 
 __all__ = [
@@ -31,9 +32,11 @@ __all__ = [
     "Charset",
     "Cue",
     "MissingVideoSupport",
+    "SubtitleTrack",
     "TerminalColor",
     "Video",
     "VideoFrame",
+    "ass_dialogue_text",
     "find_subtitles",
     "fit_size",
     "format_time",
