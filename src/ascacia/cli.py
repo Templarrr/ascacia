@@ -26,6 +26,12 @@ def _add_render_options(parser: argparse.ArgumentParser) -> None:
         "--no-edges", action="store_true", help="don't use line symbols for contours"
     )
     parser.add_argument("--colors", type=int, choices=(8, 16), default=16)
+    parser.add_argument(
+        "--dither",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="mix neighbouring symbols and colors to show the shades in between",
+    )
     parser.add_argument("--no-color", action="store_true")
     parser.add_argument(
         "--cell-aspect",
@@ -87,6 +93,7 @@ def image_main(argv: list[str] | None = None) -> int:
         "color": not args.no_color,
         "cell_aspect": args.cell_aspect,
         "edge_threshold": args.edge_threshold,
+        "dither": args.dither,
     }
 
     if args.print or not sys.stdout.isatty():
@@ -174,6 +181,7 @@ def video_main(argv: list[str] | None = None) -> int:
             color=not args.no_color,
             cell_aspect=args.cell_aspect,
             edge_threshold=args.edge_threshold,
+            dither=args.dither,
         )
     return 0
 

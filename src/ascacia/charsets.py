@@ -1,3 +1,4 @@
+import bisect
 import sys
 from dataclasses import dataclass
 from functools import cached_property
@@ -26,24 +27,41 @@ class Charset:
             raise ValueError("edges must have exactly four symbols: - / | \\")
         if self.levels is not None and len(self.levels) != len(self.ramp):
             raise ValueError("levels must have one value per ramp symbol")
+        if self.levels is not None and list(self.levels) != sorted(self.levels):
+            raise ValueError("levels must go from the emptiest to the densest symbol")
 
     def symbol(self, brightness: float) -> str:
         """Symbol for a brightness from 0 to 255."""
         return self._lookup[min(max(round(brightness), 0), 255)]
 
-    @cached_property
-    def _lookup(self) -> str:
+    def coverage(self, brightness: float) -> float:
+        """Ink coverage from 0 to 1 that best shows a brightness from 0 to 255."""
         if self.levels is None:
-            top = len(self.ramp) - 1
-            return "".join(self.ramp[round(value / 255 * top)] for value in range(256))
+            return brightness / 255
         # Coverage mixes light linearly while brightness is gamma encoded, so compare
         # in linear light; this spreads the many sparse glyphs over the darker half.
-        symbols = []
-        for value in range(256):
-            target = (value / 255) ** 2.2
-            nearest = min(range(len(self.levels)), key=lambda i: abs(self.levels[i] - target))
-            symbols.append(self.ramp[nearest])
-        return "".join(symbols)
+        return (max(brightness, 0) / 255) ** 2.2
+
+    def nearest(self, coverage: float) -> int:
+        """Index of the ramp symbol whose coverage is closest to ``coverage``."""
+        index = bisect.bisect(self._midpoints, coverage)
+        return min(index, len(self.ramp) - 1)
+
+    @cached_property
+    def tones(self) -> tuple[float, ...]:
+        """Coverage of each ramp symbol, in the same scale as :meth:`coverage`."""
+        if self.levels is None:
+            top = len(self.ramp) - 1
+            return tuple(i / top for i in range(top + 1))
+        return self.levels
+
+    @cached_property
+    def _midpoints(self) -> list[float]:
+        return [(a + b) / 2 for a, b in zip(self.tones, self.tones[1:], strict=False)]
+
+    @cached_property
+    def _lookup(self) -> str:
+        return "".join(self.ramp[self.nearest(self.coverage(value))] for value in range(256))
 
 
 ASCII = Charset(ramp=" .:;+=*#%@", edges="-/|\\")

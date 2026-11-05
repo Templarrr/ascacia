@@ -6,7 +6,8 @@ from os import PathLike
 from PIL import Image, ImageDraw, ImageFilter, ImageMath, ImageOps
 
 from .charsets import ASCII, Charset
-from .colors import ANSI_RESET, ansi_sequence, nearest_color
+from .colors import ANSI_RESET, ansi_sequence, dither_colors, nearest_color
+from .dither import diffuse
 
 # Terminal cells are roughly twice as tall as they are wide.
 DEFAULT_CELL_ASPECT = 2.0
@@ -66,10 +67,13 @@ def image_to_cells(
     charset: Charset = ASCII,
     colors: int = 16,
     edge_threshold: float = DEFAULT_EDGE_THRESHOLD,
+    dither: bool = False,
 ) -> list[list[Cell]]:
     """Convert an image into a ``rows`` x ``cols`` grid of colored symbols.
 
     The image is stretched to the grid, use :func:`fit_size` first to keep its proportions.
+    ``dither`` spreads the rounding error of symbols and colors over neighbouring cells,
+    which turns banding in smooth gradients into a finer mix of shades and hues.
     """
     if cols <= 0 or rows <= 0:
         raise ValueError("cols and rows must be positive")
@@ -77,6 +81,12 @@ def image_to_cells(
     data = rgb.resize((cols, rows), Image.Resampling.BOX).tobytes()
     averages = [tuple(data[i : i + 3]) for i in range(0, len(data), 3)]
     edges = _edge_symbols(rgb, cols, rows, charset.edges, edge_threshold)
+    if dither:
+        symbols = _dither_symbols(averages, cols, charset)
+        hues = dither_colors(averages, cols, colors)
+    else:
+        symbols = [charset.symbol(_brightness(rgb_average)) for rgb_average in averages]
+        hues = [nearest_color(rgb_average, colors) for rgb_average in averages]
 
     cells = []
     for i, rgb_average in enumerate(averages):
@@ -88,8 +98,7 @@ def image_to_cells(
             source = max([rgb_average] + [averages[j] for j in neighbours], key=_brightness)
             cells.append(Cell(symbol, nearest_color(source, colors)))
         else:
-            symbol = charset.symbol(_brightness(rgb_average))
-            cells.append(Cell(symbol, nearest_color(rgb_average, colors)))
+            cells.append(Cell(symbols[i], hues[i]))
     return [cells[y * cols : (y + 1) * cols] for y in range(rows)]
 
 
@@ -102,9 +111,10 @@ def image_to_text(
     color: bool = True,
     cell_aspect: float = DEFAULT_CELL_ASPECT,
     edge_threshold: float = DEFAULT_EDGE_THRESHOLD,
+    dither: bool = False,
 ) -> str:
     cols, rows = fit_size(image.width, image.height, max_cols, max_rows, cell_aspect)
-    cells = image_to_cells(image, cols, rows, charset, colors, edge_threshold)
+    cells = image_to_cells(image, cols, rows, charset, colors, edge_threshold, dither)
     return render_ansi(cells) if color else render_plain(cells)
 
 
@@ -125,6 +135,14 @@ def render_ansi(cells: list[list[Cell]]) -> str:
         parts.append(ANSI_RESET)
         lines.append("".join(parts))
     return "\n".join(lines)
+
+
+def _dither_symbols(pixels: list[tuple[int, ...]], cols: int, charset: Charset) -> list[str]:
+    def quantize(_, coverage):
+        index = charset.nearest(coverage[0])
+        return charset.ramp[index], (coverage[0] - charset.tones[index],)
+
+    return diffuse([(charset.coverage(_brightness(rgb)),) for rgb in pixels], cols, quantize)
 
 
 def _brightness(rgb: tuple[int, int, int]) -> float:

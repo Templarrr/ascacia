@@ -23,23 +23,30 @@ def view_image(
     color: bool = True,
     cell_aspect: float = DEFAULT_CELL_ASPECT,
     edge_threshold: float = DEFAULT_EDGE_THRESHOLD,
+    dither: bool = False,
 ) -> None:
     """Show the image full screen until q or Esc is pressed, refitting on terminal resize."""
     # Without this curses mangles multibyte symbols.
     locale.setlocale(locale.LC_ALL, "")
-    curses.wrapper(_run, image, title, charset, colors, color, cell_aspect, edge_threshold)
+    render = {
+        "charset": charset,
+        "colors": colors,
+        "edge_threshold": edge_threshold,
+        "dither": dither,
+    }
+    curses.wrapper(_run, image, title, color, cell_aspect, render)
 
 
-def _run(screen, image, title, charset, colors, color, cell_aspect, edge_threshold):
+def _run(screen, image, title, color, cell_aspect, render):
     curses.curs_set(0)
-    attrs = _color_attrs(colors) if color else {}
+    attrs = _color_attrs(render["colors"]) if color else {}
     while True:
         screen.erase()
         height, width = screen.getmaxyx()
         # The bottom line is kept for the status bar.
         if height > 1 and width > 0:
             cols, rows = fit_size(image.width, image.height, width, height - 1, cell_aspect)
-            cells = image_to_cells(image, cols, rows, charset, colors, edge_threshold)
+            cells = image_to_cells(image, cols, rows, **render)
             top = (height - 1 - rows) // 2
             left = (width - cols) // 2
             for y, row in enumerate(cells):
