@@ -13,7 +13,7 @@ from .video import MissingVideoSupport, Video
 from .viewer import view_image
 
 
-def _add_render_options(parser: argparse.ArgumentParser) -> None:
+def _add_render_options(parser: argparse.ArgumentParser, dither: bool) -> None:
     parser.add_argument("path", type=Path, help="input file")
     parser.add_argument(
         "--charset",
@@ -26,6 +26,14 @@ def _add_render_options(parser: argparse.ArgumentParser) -> None:
         "--no-edges", action="store_true", help="don't use line symbols for contours"
     )
     parser.add_argument("--colors", type=int, choices=(8, 16), default=16)
+    parser.add_argument(
+        "--dither",
+        action=argparse.BooleanOptionalAction,
+        help="mix neighbouring symbols and colors to show the shades in between "
+        f"(default: {'on' if dither else 'off'})",
+    )
+    # Set apart from the option so that older Pythons don't print a second default.
+    parser.set_defaults(dither=dither)
     parser.add_argument("--no-color", action="store_true")
     parser.add_argument(
         "--cell-aspect",
@@ -58,7 +66,7 @@ def image_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="ascacia_image", description="Show an image as colored text art in the terminal."
     )
-    _add_render_options(parser)
+    _add_render_options(parser, dither=True)
     parser.add_argument(
         "--print",
         action="store_true",
@@ -87,6 +95,7 @@ def image_main(argv: list[str] | None = None) -> int:
         "color": not args.no_color,
         "cell_aspect": args.cell_aspect,
         "edge_threshold": args.edge_threshold,
+        "dither": args.dither,
     }
 
     if args.print or not sys.stdout.isatty():
@@ -104,7 +113,8 @@ def video_main(argv: list[str] | None = None) -> int:
         prog="ascacia_video",
         description="Play a video as colored text art in the terminal (no sound).",
     )
-    _add_render_options(parser)
+    # The dither pattern shifts from frame to frame and shows up as crawling noise.
+    _add_render_options(parser, dither=False)
     chosen = parser.add_mutually_exclusive_group()
     chosen.add_argument(
         "--subtitles",
@@ -174,6 +184,7 @@ def video_main(argv: list[str] | None = None) -> int:
             color=not args.no_color,
             cell_aspect=args.cell_aspect,
             edge_threshold=args.edge_threshold,
+            dither=args.dither,
         )
     return 0
 

@@ -1,5 +1,9 @@
+import colorsys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+
+from .dither import diffuse
 
 
 @dataclass(frozen=True)
@@ -40,6 +44,9 @@ _HUES = {
     7: (255, 255, 255),
 }
 _BRIGHT_VALUE = 170
+# Palette hues in color wheel order, one HSV sector apart.
+_WHEEL = (1, 3, 2, 6, 4, 5)
+_MIN_SATURATION = 0.1
 
 
 # Video calls this for every cell of every frame, and neighbouring cells and frames
@@ -52,17 +59,60 @@ def nearest_color(rgb: tuple[int, int, int], colors: int = 16) -> int:
     the hue. Black is never returned because it would be invisible on a dark
     background.
     """
+    _check_colors(colors)
+    return _shade(_nearest_hue(_full_brightness(rgb)), max(rgb), colors)
+
+
+def dither_colors(pixels: Sequence[tuple[int, int, int]], cols: int, colors: int = 16) -> list[int]:
+    """:func:`nearest_color` for a row-major grid of pixels, with the rounding error diffused.
+
+    Neighbouring cells then mix the few terminal colors so that they average out to the
+    real one: red and yellow for orange, magenta and white for pink.
+    """
+    _check_colors(colors)
+    hsv = [colorsys.rgb_to_hsv(*(channel / 255 for channel in rgb)) for rgb in pixels]
+
+    def quantize(i, wanted):
+        # Hue and saturation are dithered apart so that a cell only ever takes one of the
+        # two palette hues around its own, or white; mixing in all of RGB at once also
+        # throws in hues from across the wheel, e.g. magenta specks in brown.
+        hue, saturation = wanted
+        _, own_saturation, value = hsv[i]
+        sector = round(hue)
+        saturation = min(max(saturation, 0.0), 1.0)
+        # A gray cell has no hue of its own to show.
+        colored = saturation >= 0.5 and own_saturation >= _MIN_SATURATION
+        index = _WHEEL[sector % 6] if colored else 7
+        # The symbol already shows the brightness, so a dim cell's color barely counts.
+        return index, ((hue - sector) * own_saturation * value, (saturation - colored) * value)
+
+    indices = diffuse([(hue * 6, saturation) for hue, saturation, _ in hsv], cols, quantize)
+    return [_shade(index, max(rgb), colors) for index, rgb in zip(indices, pixels, strict=True)]
+
+
+def _check_colors(colors: int) -> None:
     if colors not in (8, 16):
         raise ValueError("colors must be 8 or 16")
+
+
+def _full_brightness(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
     value = max(rgb)
     if value == 0:
-        return 7
+        return (255.0, 255.0, 255.0)
     scale = 255 / value
-    r, g, b = (channel * scale for channel in rgb)
-    hue = min(
+    r, g, b = rgb
+    return (r * scale, g * scale, b * scale)
+
+
+def _nearest_hue(rgb: Sequence[float]) -> int:
+    r, g, b = rgb
+    return min(
         _HUES,
         key=lambda i: (r - _HUES[i][0]) ** 2 + (g - _HUES[i][1]) ** 2 + (b - _HUES[i][2]) ** 2,
     )
+
+
+def _shade(hue: int, value: int, colors: int) -> int:
     if colors == 16 and value >= _BRIGHT_VALUE:
         return hue + 8
     return hue

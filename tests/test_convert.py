@@ -132,3 +132,49 @@ def test_transparent_image_is_shown_on_black(tmp_path):
     Image.new("RGBA", (10, 10), (255, 255, 255, 0)).save(path)
 
     assert load_image(path).getpixel((5, 5)) == (0, 0, 0)
+
+
+def test_dithering_mixes_neighbouring_symbols_to_match_the_shade():
+    # Coverage 0.5 sits between ASCII's "+" (4/9) and "=" (5/9).
+    image = Image.new("RGB", (40, 20), (128, 128, 128))
+
+    plain = image_to_cells(image, 40, 20)
+    dithered = image_to_cells(image, 40, 20, dither=True)
+
+    assert chars(plain) == {"="}
+    assert chars(dithered) == {"+", "="}
+    coverage = [ASCII.ramp.index(cell.char) / 9 for row in dithered for cell in row]
+    assert sum(coverage) / len(coverage) == pytest.approx(128 / 255, abs=0.01)
+
+
+@pytest.mark.parametrize("fill", ["black", "white"])
+def test_dithering_leaves_exact_shades_alone(fill):
+    image = Image.new("RGB", (20, 10), fill)
+
+    assert image_to_cells(image, 20, 10, dither=True) == image_to_cells(image, 20, 10)
+
+
+def test_dithering_leaves_palette_hues_alone():
+    cells = image_to_cells(Image.new("RGB", (20, 10), (0, 200, 0)), 20, 10, dither=True)
+
+    assert {cell.color for row in cells for cell in row} == {10}  # bright green
+
+
+@pytest.mark.parametrize(
+    ("rgb", "mix"),
+    [
+        ((255, 128, 0), {9, 11}),  # orange: bright red and bright yellow
+        ((255, 130, 255), {13, 15}),  # pink: bright magenta and bright white
+    ],
+)
+def test_dithering_mixes_terminal_colors_for_hues_in_between(rgb, mix):
+    image = Image.new("RGB", (20, 10), rgb)
+
+    colors = {cell.color for row in image_to_cells(image, 20, 10, dither=True) for cell in row}
+
+    assert colors == mix
+
+
+def test_levels_must_grow_with_the_ramp():
+    with pytest.raises(ValueError):
+        Charset(ramp=" .#", levels=(0.0, 0.6, 0.3))

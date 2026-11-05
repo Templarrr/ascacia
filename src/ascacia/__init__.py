@@ -1,5 +1,5 @@
 from .charsets import ASCII, CHARSETS, UNICODE, Charset, supports_unicode
-from .colors import ANSI_COLORS, TerminalColor, nearest_color
+from .colors import ANSI_COLORS, TerminalColor, dither_colors, nearest_color
 from .convert import (
     Cell,
     fit_size,
@@ -37,6 +37,7 @@ __all__ = [
     "Video",
     "VideoFrame",
     "ass_dialogue_text",
+    "dither_colors",
     "find_subtitles",
     "fit_size",
     "format_time",

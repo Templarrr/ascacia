@@ -78,17 +78,32 @@ def play_video(
     color: bool = True,
     cell_aspect: float = DEFAULT_CELL_ASPECT,
     edge_threshold: float = DEFAULT_EDGE_THRESHOLD,
+    dither: bool = False,
 ) -> None:
     """Play the video full screen until q or Esc, with the subtitles shown beside it."""
     if not isinstance(video, Video):
         with Video(video) as opened:
             play_video(
-                opened, subtitles, title, start, charset, colors, color, cell_aspect, edge_threshold
+                opened,
+                subtitles,
+                title,
+                start,
+                charset,
+                colors,
+                color,
+                cell_aspect,
+                edge_threshold,
+                dither,
             )
             return
     locale.setlocale(locale.LC_ALL, "")
     glyphs = _UNICODE_GLYPHS if supports_unicode() else _ASCII_GLYPHS
-    render = {"charset": charset, "colors": colors, "edge_threshold": edge_threshold}
+    render = {
+        "charset": charset,
+        "colors": colors,
+        "edge_threshold": edge_threshold,
+        "dither": dither,
+    }
     curses.wrapper(
         lambda screen: _Player(
             screen, video, subtitles or [], title, glyphs, color, cell_aspect, render
