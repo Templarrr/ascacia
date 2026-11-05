@@ -111,14 +111,14 @@ def test_unknown_subtitle_track_is_reported(subtitled_video_path, capsys):
     assert "no subtitle track '9'" in capsys.readouterr().err
 
 
-def test_image_print_mode_can_turn_dithering_off(data_dir, capsys):
+def test_image_print_mode_can_turn_dithering_on(data_dir, capsys):
     path = data_dir / "spheres.png"
     args = [str(path), "--print", "--cols", "40", "--rows", "12"]
 
     image_main(args)
-    dithered = capsys.readouterr().out
-    image_main([*args, "--no-dither"])
     plain = capsys.readouterr().out
+    image_main([*args, "--dither"])
+    dithered = capsys.readouterr().out
 
     assert plain == image_to_text(load_image(path), 40, 12) + "\n"
     assert dithered != plain

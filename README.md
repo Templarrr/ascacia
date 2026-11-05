@@ -22,7 +22,7 @@ uv tool install "ascacia[video] @ git+https://github.com/Templarrr/ascacia"
 ascacia_image photo.jpg                     # full-screen viewer, q or Esc to quit
 ascacia_image photo.jpg --charset unicode   # block and box-drawing symbols
 ascacia_image photo.jpg --print --cols 100  # write the art to stdout instead
-ascacia_image photo.jpg --no-dither         # flat bands instead of mixed shades
+ascacia_image photo.jpg --dither            # mix shades instead of flat bands
 ascacia_image --help
 ```
 
@@ -30,7 +30,7 @@ The picture is fitted to the terminal keeping its proportions and is refitted wh
 window is resized. Contours are drawn with line symbols (`- / | \` or `─ ╱ │ ╲`), the rest
 with a density ramp, colored with the standard 16 (or 8) terminal colors.
 
-Pictures are dithered: the rounding error of every symbol and color is spread over the
+With `--dither` the rounding error of every symbol and color is spread over the
 cells next to it (Floyd-Steinberg), so smooth gradients come out as a mix of neighbouring
 symbols instead of flat bands, and hues the palette lacks are mixed from the ones around
 them, e.g. red and yellow for orange or magenta and white for pink.
@@ -45,7 +45,6 @@ ascacia_video movie.mp4 --subtitles other.vtt  # or given explicitly
 ascacia_video movie.mkv --list-subtitles       # tracks inside the video
 ascacia_video movie.mkv --subtitle-track fre   # pick one by number or language
 ascacia_video movie.mp4 --start 12:30 --charset unicode
-ascacia_video movie.mp4 --dither               # off by default, the pattern crawls
 ```
 
 ![player](docs/examples/player.png)
